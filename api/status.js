@@ -2,7 +2,6 @@ import { KlingAPI } from 'kling-api';
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
-  
   const { taskId } = req.query;
 
   try {
