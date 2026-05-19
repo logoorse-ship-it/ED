@@ -291,35 +291,35 @@ async function makeJWT() {
 
 async function generateVideo(question) {
   const prompt = `Educational explainer video about: ${question}. Cinematic scientific animation, stunning visuals, smooth motion, beautiful lighting. Educational documentary style, engaging and clear. No text overlays.`;
-  const jwt = await makeJWT();
 
-  const res = await fetch('https://api.klingai.com/v1/videos/text2video', {
+  const res = await fetch('/api/video', {
     method: 'POST',
-    headers: { 'Authorization': `Bearer ${jwt}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ model_name:'kling-v1', prompt, negative_prompt:'text, watermark, blurry', cfg_scale:0.5, mode:'std', duration:'5' })
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ prompt })
   });
 
-  if (!res.ok) { const e=await res.json(); throw new Error(e.message||'Submit failed'); }
-  const d = await res.json();
-  const taskId = d.data?.task_id;
-  if (!taskId) throw new Error('No task ID');
+  const data = await res.json();
+  const taskId = data.data?.task_id;
+  if (!taskId) throw new Error('No task ID returned');
+
   return await poll(taskId);
 }
 
 async function poll(taskId, n=0) {
   if (n>60) throw new Error('Timed out');
   await new Promise(r=>setTimeout(r,3000));
-  const jwt = await makeJWT();
-  const res = await fetch(`https://api.klingai.com/v1/videos/text2video/${taskId}`, { headers:{'Authorization':`Bearer ${jwt}`} });
-  if (!res.ok) throw new Error('Poll failed');
-  const d = await res.json();
-  const s = d.data?.task_status;
+
+  const res = await fetch(`/api/status?taskId=${taskId}`);
+  const data = await res.json();
+  const s = data.data?.task_status;
+
   if (s==='succeed') {
-    const url = d.data?.task_result?.videos?.[0]?.url;
+    const url = data.data?.task_result?.videos?.[0]?.url;
     if (!url) throw new Error('No video URL');
     return url;
   }
   if (s==='failed') throw new Error('Generation failed');
+
   const msgs = ['Generating your visual','Rendering frames','Almost there','Putting it together'];
   $('loadingText').textContent = msgs[n%msgs.length];
   return await poll(taskId, n+1);
