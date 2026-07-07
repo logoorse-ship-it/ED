@@ -194,12 +194,6 @@
 </div>
 
 <script>
-// ══════════════════════════════
-// REPLACE THESE WITH YOUR KEYS
-const KLING_ACCESS_KEY = 'AbPT9FDbyFATNQhGCKTbgdbEaEgnAtmk';
-const KLING_SECRET_KEY = '8QJgQNDhQKReLMCe88p9drdNGnyyEnTJ';
-// ══════════════════════════════
-
 let isListening = false;
 let recognition = null;
 let currentQuestion = '';
@@ -276,53 +270,40 @@ async function askQuestion(question) {
   }
 }
 
-// JWT
-async function makeJWT() {
-  const enc = obj => btoa(JSON.stringify(obj)).replace(/=/g,'').replace(/\+/g,'-').replace(/\//g,'_');
-  const now = Math.floor(Date.now()/1000);
-  const h = enc({alg:'HS256',typ:'JWT'});
-  const p = enc({iss:KLING_ACCESS_KEY,exp:now+1800,nbf:now-5});
-  const input = `${h}.${p}`;
-  const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(KLING_SECRET_KEY), {name:'HMAC',hash:'SHA-256'}, false, ['sign']);
-  const sig = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(input));
-  const s = btoa(String.fromCharCode(...new Uint8Array(sig))).replace(/=/g,'').replace(/\+/g,'-').replace(/\//g,'_');
-  return `${input}.${s}`;
-}
-
+// TALKS TO YOUR FLASK SERVER (server.py)
 async function generateVideo(question) {
-  const prompt = `Educational explainer video about: ${question}. Cinematic scientific animation, stunning visuals, smooth motion, beautiful lighting. Educational documentary style, engaging and clear. No text overlays.`;
+  const SERVER = 'http://localhost:5001';
 
-  const res = await fetch('/api/video', {
+  const submitRes = await fetch(`${SERVER}/ask`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ prompt })
+    body: JSON.stringify({ question })
   });
 
-  const data = await res.json();
-  const taskId = data.data?.task_id;
-  if (!taskId) throw new Error('No task ID returned');
+  const { job_id, cached } = await submitRes.json();
 
-  return await poll(taskId);
+  if (cached) {
+    return `${SERVER}/video/${job_id}`;
+  }
+
+  return await poll(job_id, SERVER);
 }
 
-async function poll(taskId, n=0) {
-  if (n>60) throw new Error('Timed out');
-  await new Promise(r=>setTimeout(r,3000));
+async function poll(jobId, server, n = 0) {
+  if (n > 90) throw new Error('Timed out');
+  await new Promise(r => setTimeout(r, 2000));
 
-  const res = await fetch(`/api/status?taskId=${taskId}`);
+  const res = await fetch(`${server}/status/${jobId}`);
   const data = await res.json();
-  const s = data.data?.task_status;
 
-  if (s==='succeed') {
-    const url = data.data?.task_result?.videos?.[0]?.url;
-    if (!url) throw new Error('No video URL');
-    return url;
+  if (data.status === 'done') {
+    return `${server}/video/${jobId}`;
   }
-  if (s==='failed') throw new Error('Generation failed');
+  if (data.status === 'error') throw new Error('Generation failed');
 
-  const msgs = ['Generating your visual','Rendering frames','Almost there','Putting it together'];
-  $('loadingText').textContent = msgs[n%msgs.length];
-  return await poll(taskId, n+1);
+  const msgs = ['Generating your visual', 'Rendering frames', 'Almost there', 'Putting it together'];
+  $('loadingText').textContent = msgs[n % msgs.length];
+  return await poll(jobId, server, n + 1);
 }
 
 // UI
