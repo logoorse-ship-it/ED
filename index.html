@@ -272,7 +272,7 @@ async function askQuestion(question) {
 
 // TALKS TO YOUR FLASK SERVER (server.py)
 async function generateVideo(question) {
-  const SERVER = 'http://localhost:5001';
+  const SERVER = 'https://ed-backend-production.up.railway.app';
 
   const submitRes = await fetch(`${SERVER}/ask`, {
     method: 'POST',
