@@ -259,8 +259,8 @@ async function askQuestion(question) {
   addToHistory(question);
   try {
     setStatus('Generating video...', 'loading');
-    const url = await generateVideo(question);
-    showVideo(url, question);
+    const { videoUrl, narrationUrl } = await generateVideo(question);
+    showVideo(videoUrl, question, narrationUrl);
     setStatus('Done ✓');
   } catch(err) {
     console.error(err);
@@ -272,7 +272,7 @@ async function askQuestion(question) {
 
 // TALKS TO YOUR FLASK SERVER (server.py)
 async function generateVideo(question) {
-  const SERVER = 'https://ed-backend-production.up.railway.app';
+  const SERVER = 'http://localhost:5001';
 
   const submitRes = await fetch(`${SERVER}/ask`, {
     method: 'POST',
@@ -283,7 +283,10 @@ async function generateVideo(question) {
   const { job_id, cached } = await submitRes.json();
 
   if (cached) {
-    return `${SERVER}/video/${job_id}`;
+    return {
+      videoUrl: `${SERVER}/video/${job_id}`,
+      narrationUrl: `${SERVER}/narration/${job_id}`
+    };
   }
 
   return await poll(job_id, SERVER);
@@ -297,7 +300,10 @@ async function poll(jobId, server, n = 0) {
   const data = await res.json();
 
   if (data.status === 'done') {
-    return `${server}/video/${jobId}`;
+    return {
+      videoUrl: `${server}/video/${jobId}`,
+      narrationUrl: `${server}/narration/${jobId}`
+    };
   }
   if (data.status === 'error') throw new Error('Generation failed');
 
@@ -316,12 +322,20 @@ function showLoading(q) {
   $('loadingText').textContent = 'Generating your visual';
 }
 
-function showVideo(url, q) {
+function showVideo(url, q, narrationUrl) {
   $('loadingState').classList.remove('visible');
   $('emptyState').style.display='none';
   $('videoState').classList.add('visible');
   $('videoPlayer').src = url;
   $('videoQuestion').textContent = q;
+
+  if (narrationUrl) {
+    const audio = new Audio(narrationUrl);
+    $('videoPlayer').muted = true;
+    $('videoPlayer').addEventListener('play', () => audio.play(), { once: true });
+    $('videoPlayer').addEventListener('pause', () => audio.pause());
+    $('videoPlayer').addEventListener('ended', () => audio.pause());
+  }
 }
 
 function resetToEmpty() {
